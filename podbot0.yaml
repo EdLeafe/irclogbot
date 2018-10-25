@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: irclogbot0
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logbot
+  template:
+    metadata:
+      labels:
+        app: logbot
+    spec:
+      containers:
+      - name: logbot-0
+        image: edleafe/irclogbot:v1.8
+        ports:
+        - containerPort: 80
+          name: http
+        - containerPort: 6667
+          name: irc
+        - containerPort: 9200
+          name: elastic
+        securityContext:
+          privileged: true
+        command: ["python", "-u", "irclogbot.py", "-f", "channels.txt", "-s", "0"]

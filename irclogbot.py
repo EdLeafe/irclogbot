@@ -3,6 +3,7 @@ from configparser import ConfigParser
 import datetime as dt
 import re
 import socket
+import time
 
 from elasticsearch import Elasticsearch
 
@@ -11,7 +12,7 @@ import utils
 
 cp = ConfigParser()
 with open(".irccreds") as ff:
-    cp.read(ff)
+    cp.read_file(ff)
 PASSWD = cp.get("default", "password")
 HOST = cp.get("default", "host")
 es_client = Elasticsearch(host=HOST)
@@ -19,7 +20,8 @@ es_client = Elasticsearch(host=HOST)
 MSG_PAT = re.compile(r":([^!]+)!~([^@]+)@(\S+) PRIVMSG (\S+) :(.+)")
 SERVER = "chat.freenode.net"
 NICK_BASE = "irclogbot_"
-CHANNELS_PER_BOT = 20
+CHANNELS_PER_BOT = 40
+PAUSE_BETWEEN_JOINS = 5
 
 
 def record(nick, channel, remark):
@@ -58,11 +60,6 @@ class IRCLogBot():
         msg = "PRIVMSG NickServ :IDENTIFY %s\n" % PASSWD
         self.ircsock.send(bytes(msg, "UTF-8"))
         self.wait_for("You are now identified")
-
-        print("#" * 88)
-        for chan in self.channels:
-            print(chan)
-        print("#" * 88)
 
         for chan in self.channels:
             self.joinchan(chan)
@@ -112,13 +109,32 @@ class IRCLogBot():
             self.process_msg(ircmsg)
 
 
+    def pause(self, seconds):
+        start = dt.datetime.utcnow()
+        end = start + dt.timedelta(seconds=seconds)
+        curr_timeout = self.ircsock.gettimeout()
+        self.ircsock.settimeout(0.5)
+        nowtime = dt.datetime.utcnow()
+        while nowtime < end:
+            try:
+                ircmsg = self.ircsock.recv(2048).decode("UTF-8")
+            except socket.timeout:
+                ircmsg = ""
+                time.sleep(0.1)
+            ircmsg = ircmsg.strip("\n\r")
+            self.process_msg(ircmsg)
+            nowtime = dt.datetime.utcnow()
+        self.ircsock.settimeout(curr_timeout)
+
+
     def joinchan(self, chan):
         print("-" * 88)
-        print("JOINING", chan)
+        print("JOINING", chan, "AT", dt.datetime.utcnow())
         self.ircsock.send(bytes("JOIN %s\n" % chan, "UTF-8")) 
-#        self.wait_for(["End of /NAMES list.", "Cannot join channel"])
-        print("-" * 88)
-        print("!!!!!JOINED", chan)
+        # See if this makes the IRC server happier about flooding it with
+        # requests...
+        self.pause(PAUSE_BETWEEN_JOINS)
+        print("!!!!!JOINED", chan, "AT", dt.datetime.utcnow())
 
 
     def ping(self): # respond to server Pings.
@@ -164,24 +180,6 @@ def main():
     print("NICK:", nick)
     # Start it!
     bot.run()
-
-#    chan_count = len(channels)
-#    if chan_count > 10 * CHANNELS_PER_BOT:
-#        # Only have 10 bots registered
-#        print("Too many channels: %s. Need to register more bots.")
-#        exit()
-#    thread_list = []
-#    while channels:
-#        bot_chans, channels = (channels[:CHANNELS_PER_BOT],
-#                channels[CHANNELS_PER_BOT:])
-#        nick = "%s%s" % (NICK_BASE, len(thread_list))
-#        bot = IRCLogBot(nick, bot_chans)
-#        thread_list.append(bot)
-#        print(nick, len(bot_chans))
-#    for thd in thread_list:
-#        thd.start()
-#    for thd in thread_list:
-#        thd.join()
 
 
 if __name__ == "__main__":

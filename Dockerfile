@@ -6,4 +6,4 @@
   ADD     channels.txt /
   ADD     utils.py /
   WORKDIR /
-  ENTRYPOINT  ["python"]
+  ENTRYPOINT  ["bash"]

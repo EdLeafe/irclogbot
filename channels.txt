@@ -9,13 +9,11 @@
 #heat
 #kata-dev
 #kata-general
-#kolla
 #magnetodb
 #midonet
 #murano
 #networking-sfc
 #oooq
-#openstack-101
 #openstack-ansible
 #openstack-api
 #openstack-app-catalog
@@ -23,7 +21,6 @@
 #openstack-barbican
 #openstack-bareon
 #openstack-blazar
-#openstack-ceilometer
 #openstack-chef
 #openstack-cinder
 #openstack-climate
@@ -32,7 +29,6 @@
 #openstack-containers
 #openstack-cue
 #openstack-cyborg
-#openstack-defcore
 #openstack-deployment
 #openstack-dev
 #openstack-dib
@@ -88,10 +84,8 @@
 #openstack-neutron-ovn
 #openstack-neutron-release
 #openstack-neutron
-#openstack-nimble
 #openstack-nova
 #openstack-operators
-#openstack-opw
 #openstack-oslo
 #openstack-outreachy
 #openstack-performance
@@ -101,14 +95,12 @@
 #openstack-product
 #openstack-ptg
 #openstack-publiccloud
-#openstack-python3
 #openstack-qa
 #openstack-qinling
 #openstack-quota
 #openstack-rally
 #openstack-rating
 #openstack-release
-#openstack-relmgr-office
 #openstack-requirements
 #openstack-rpm-packaging
 #openstack-sahara
