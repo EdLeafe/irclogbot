@@ -7,6 +7,13 @@ spec:
   selector:
     matchLabels:
       app: logbot
+  minReadySeconds: 5
+  strategy:
+    # indicate which strategy we want for rolling update
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
   template:
     metadata:
       labels:
@@ -14,7 +21,7 @@ spec:
     spec:
       containers:
       - name: logbot-1
-        image: edleafe/irclogbot:v1.8
+        image: edleafe/irclogbot:v1.11
         ports:
         - containerPort: 80
           name: http
@@ -24,4 +31,18 @@ spec:
           name: elastic
         securityContext:
           privileged: true
-        command: ["python", "irclogbot.py", "-f", "channels.txt", "-s", "1"]
+        command: ["python", "-u", "irclogbot.py", "-f", "channels.txt", "-s", "1"]
+        readinessProbe:
+          exec:
+            command:
+              - python
+              - filemod_check.py
+          initialDelaySeconds: 60
+          periodSeconds: 5
+        livenessProbe:
+          exec:
+            command:
+              - python
+              - filemod_check.py
+          initialDelaySeconds: 60
+          periodSeconds: 180
