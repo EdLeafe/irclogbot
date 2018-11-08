@@ -1,6 +1,7 @@
 import argparse
 from configparser import ConfigParser
 import datetime as dt
+import os
 import re
 import socket
 import time
@@ -22,6 +23,12 @@ SERVER = "chat.freenode.net"
 NICK_BASE = "irclogbot_"
 CHANNELS_PER_BOT = 40
 PAUSE_BETWEEN_JOINS = 5
+HEARTBEAT_FILE = "/ALIVE"
+
+
+def heartbeat():
+    cmd = "touch %s" % HEARTBEAT_FILE
+    os.system(cmd)
 
 
 def record(nick, channel, remark):
@@ -38,10 +45,16 @@ def record(nick, channel, remark):
 
 
 class IRCLogBot():
-    def __init__(self, nick, channels):
+    def __init__(self, nick, channels, verbose=False):
         self.nick = nick
         self.channels = channels
+        self.verbose = verbose
         super(IRCLogBot, self).__init__()
+
+
+    def logit(self, *msgs, force=False):
+        if force or self.verbose:
+            print(*msgs)
 
 
     def run(self):
@@ -55,18 +68,21 @@ class IRCLogBot():
         # assign the nick to the bot
         msg = "NICK %s\n" % self.nick
         self.ircsock.send(bytes(msg, "UTF-8"))
-        self.wait_for("NickServ identify <password>")
+        self.logit("NICK sent", msg)
+#        self.wait_for("NickServ identify <password>")
         # Send the nick password to the nick server
         msg = "PRIVMSG NickServ :IDENTIFY %s\n" % PASSWD
         self.ircsock.send(bytes(msg, "UTF-8"))
-        self.wait_for("You are now identified")
+        self.logit("PASSWD sent")
+#        self.wait_for("You are now identified")
 
         for chan in self.channels:
             self.joinchan(chan)
 
-        print("@" * 88)
-        print("And away we go!!!!")
-        print("@" * 88)
+        self.logit("@" * 88)
+        self.logit("And away we go!!!!")
+        self.logit("@" * 88)
+        heartbeat()
         while True:
             ircmsg = self.ircsock.recv(2048).decode("UTF-8")
             ircmsg = ircmsg.strip(" \n\r")
@@ -77,7 +93,9 @@ class IRCLogBot():
         if not ircmsg:
             return
         # This can be useful for debugging
-        print(dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), ircmsg)
+        is_ping = "PING :" in ircmsg
+        self.logit(dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), ircmsg,
+                force=is_ping)
         if "PING :" in ircmsg:
             self.ping()
             return
@@ -128,18 +146,20 @@ class IRCLogBot():
 
 
     def joinchan(self, chan):
-        print("-" * 88)
-        print("JOINING", chan, "AT", dt.datetime.utcnow())
+        self.logit("-" * 88)
+        self.logit("JOINING", chan, "AT", dt.datetime.utcnow(), force=True)
         self.ircsock.send(bytes("JOIN %s\n" % chan, "UTF-8")) 
         # See if this makes the IRC server happier about flooding it with
         # requests...
         self.pause(PAUSE_BETWEEN_JOINS)
-        print("!!!!!JOINED", chan, "AT", dt.datetime.utcnow())
+        self.logit("!!!!!JOINED", chan, "AT", dt.datetime.utcnow(),
+                force=True)
 
 
     def ping(self): # respond to server Pings.
         self.ircsock.send(bytes("PONG :pingis\n", "UTF-8"))
-        print("PONG!")
+        self.logit("PONG!")
+        heartbeat()
 
 
     def sendmsg(self, msg, target):
@@ -158,6 +178,8 @@ def main():
     parser.add_argument("--channel", "-c", action="append",
             help="Channels for the bot to join. Can be specified multiple "
             "times to join multiple channels.")
+    parser.add_argument("--verbose", "-v", action="store_true",
+            help="Enables verbose output.")
     args = parser.parse_args()
     if args.channel_file:
         with open(args.channel_file) as ff:
@@ -176,8 +198,9 @@ def main():
         print("You must specify at least one channel")
         exit(1)
     nick = "%s%s" % (NICK_BASE, islice)
-    bot = IRCLogBot(nick, channels)
-    print("NICK:", nick)
+    bot = IRCLogBot(nick, channels, verbose=args.verbose)
+    if args.verbose:
+        print("NICK:", nick)
     # Start it!
     bot.run()
 
