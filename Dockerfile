@@ -5,5 +5,6 @@
   ADD     .irccreds /
   ADD     channels.txt /
   ADD     utils.py /
+  ADD     filemod_check.py /
   WORKDIR /
   ENTRYPOINT  ["bash"]
