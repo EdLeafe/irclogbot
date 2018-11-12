@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - name: logbot-3
-        image: edleafe/irclogbot:v1.11
+        image: edleafe/irclogbot:v1.16
         ports:
         - containerPort: 80
           name: http
@@ -30,7 +30,7 @@ spec:
         - containerPort: 9200
           name: elastic
         securityContext:
-          privileged: true
+          privileged: false
         command: ["python", "-u", "irclogbot.py", "-f", "channels.txt", "-s", "3"]
         readinessProbe:
           exec:

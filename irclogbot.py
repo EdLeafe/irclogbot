@@ -19,7 +19,8 @@ HOST = cp.get("default", "host")
 es_client = Elasticsearch(host=HOST)
 
 MSG_PAT = re.compile(r":([^!]+)!~([^@]+)@(\S+) PRIVMSG (\S+) :(.+)")
-SERVER = "chat.freenode.net"
+#SERVER = "chat.freenode.net"
+SERVER = "204.225.96.251"
 NICK_BASE = "irclogbot_"
 CHANNELS_PER_BOT = 40
 PAUSE_BETWEEN_JOINS = 5
@@ -58,8 +59,11 @@ class IRCLogBot():
 
 
     def run(self):
+        self.logit("Running...")
         self.ircsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.logit("Connecting socket to", SERVER)
         self.ircsock.connect((SERVER, 6667))
+        self.logit("Connected to %s!" % SERVER)
         # We are basically filling out a form with this line and saying to set
         # all the fields to the bot nickname.
         msg = "USER %s %s %s %s\n" % (self.nick, self.nick, self.nick,
@@ -69,12 +73,12 @@ class IRCLogBot():
         msg = "NICK %s\n" % self.nick
         self.ircsock.send(bytes(msg, "UTF-8"))
         self.logit("NICK sent", msg)
-#        self.wait_for("NickServ identify <password>")
+        self.wait_for("NickServ identify <password>")
         # Send the nick password to the nick server
         msg = "PRIVMSG NickServ :IDENTIFY %s\n" % PASSWD
         self.ircsock.send(bytes(msg, "UTF-8"))
         self.logit("PASSWD sent")
-#        self.wait_for("You are now identified")
+        self.wait_for("You are now identified")
 
         for chan in self.channels:
             self.joinchan(chan)
@@ -123,6 +127,7 @@ class IRCLogBot():
             ircmsg = self.ircsock.recv(2048).decode("UTF-8")
             ircmsg = ircmsg.strip("\n\r")
             if any(word in ircmsg for word in txt):
+                self.logit(ircmsg, "FOUND", *txt)
                 return
             self.process_msg(ircmsg)
 
