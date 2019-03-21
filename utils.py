@@ -14,9 +14,12 @@ import pymysql
 main_cursor = None
 HOST = "dodb"
 conn = None
-CURDIR = os.getcwd()
+HOMEDIR = "/home/ed/projects/irclogbot"
 
 LOG = logging.getLogger(__name__)
+handler = logging.FileHandler(os.path.join(HOMEDIR, "bot.log"))
+LOG.addHandler(handler)
+LOG.setLevel(logging.INFO)
 
 IntegrityError = pymysql.err.IntegrityError
 
@@ -29,7 +32,7 @@ def runproc(cmd):
 
 
 def _parse_creds():
-    fpath = os.path.join(CURDIR, ".dbcreds")
+    fpath = os.path.join(HOMEDIR, ".dbcreds")
     with open(fpath) as ff:
         lines = ff.read().splitlines()
     ret = {}
@@ -121,3 +124,9 @@ def gen_key(orig_rec, digest_size=8):
     txt = "".join(txt_vals)
     m.update(txt.encode("utf-8"))
     return m.hexdigest()
+
+
+#def get_heartbeat_file():
+#    heartbeat_dir = os.path.join(HOMEDIR, "heartbeats")
+#    os.makedirs(heartbeat_dir, exist_ok=True)
+#    return os.path.join(heartbeat_dir, "ALIVE_%s")
