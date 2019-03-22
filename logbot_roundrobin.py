@@ -44,18 +44,13 @@ def heartbeat(bot):
 
 def record(nick, channel, remark, force=False):
     tm = dt.datetime.utcnow().replace(microsecond=0)
-    # Note that two bots monitoring the same channel can differ by a second,
-    # which will result in duplicate records being recorded. By eliminating the
-    # seconds, the only chance for a duplicate is if one bot sees it at n:59
-    # and another sees it at n+1:00.
     tmstr = tm.strftime("%Y-%m-%dT%H:%M:%S")
-    hash_tmstr = tm.strftime("%Y-%m-%dT%H:%M")
-    if tm.second in (59, 00):
-        # This is where a duplicate can happen, so record it in the logs
-        logit("POSSIBLE DUPE; minute = %s " % tm.minute, force=True)
-    body = {"channel": channel, "nick": nick, "posted": tmstr, "remark": remark}
-    hash_body = {"channel": channel, "nick": nick, "posted": hash_tmstr,
+    body = {"channel": channel, "nick": nick, "posted": tmstr,
             "remark": remark}
+    # Leave the time out of the hash, as two bots could differ on when they saw
+    # a posting, and generate different IDs, which would result in duplicate
+    # postings.
+    hash_body = {"channel": channel, "nick": nick, "remark": remark}
     hashval = utils.gen_key(hash_body)
     body["id"] = hashval
     attempts = 0
