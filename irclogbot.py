@@ -51,6 +51,8 @@ def record(nick, channel, remark, force=False):
                     body=body)
             break
         except Exception as e:
+            logit("Encountered exception attempting to write to Elasticsearch",
+                    e, force=True)
             attempts += 1
             if attempts >= MAX_RETRIES:
                 logit("Elasticsearch exception: %s" % e, force=True)
