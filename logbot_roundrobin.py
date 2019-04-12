@@ -13,6 +13,7 @@ import time
 from elasticsearch import Elasticsearch
 
 import utils
+from utils import logit as logit
 
 HOMEDIR = utils.HOMEDIR
 
@@ -40,6 +41,7 @@ process_pids = []
 def heartbeat(bot):
     cmd = "touch %s" % bot.heartbeat_file
     os.system(cmd)
+    logit("HEARTBEAT!!", cmd, force=True)
 
 
 def record(nick, channel, remark, force=False):
@@ -65,16 +67,6 @@ def record(nick, channel, remark, force=False):
             if attempts >= MAX_RETRIES:
                 logit("Elasticsearch exception: %s" % e, force=True)
                 break
-
-
-def logit(*msgs, force=False):
-    tm = dt.datetime.utcnow().replace(microsecond=0)
-    tmstr = tm.strftime("%Y-%m-%dT%H:%M:%S")
-    log = utils.LOG
-    mthd = log.info if force else log.debug
-    msg_str = " ".join(["%s" % m for m in msgs])
-    msg = tmstr + " " + msg_str
-    mthd(msg)
 
 
 def join_channels(bot, queue):
@@ -213,6 +205,7 @@ class LogBot():
         # requests...
         self.pause(PAUSE_BETWEEN_JOINS)
         logit("!!!!!JOINED", chan, force=True)
+        heartbeat(self)
 
 
     def ping(self): # respond to server Pings.

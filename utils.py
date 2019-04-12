@@ -24,11 +24,21 @@ LOG.setLevel(logging.INFO)
 IntegrityError = pymysql.err.IntegrityError
 
 
-def runproc(cmd):
+def runproc(cmd, wait=True):
     proc = Popen([cmd], shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE,
             close_fds=True)
-    stdout_text, stderr_text = proc.communicate()
-    return stdout_text, stderr_text
+    if wait:
+        stdout_text, stderr_text = proc.communicate()
+        return stdout_text, stderr_text
+
+
+def logit(*msgs, force=False):
+    tm = datetime.utcnow().replace(microsecond=0)
+    tmstr = tm.strftime("%Y-%m-%dT%H:%M:%S")
+    mthd = LOG.info if force else LOG.debug
+    msg_str = " ".join(["%s" % m for m in msgs])
+    msg = tmstr + " " + msg_str
+    mthd(msg)
 
 
 def _parse_creds():
