@@ -1,6 +1,10 @@
 import argparse
 from configparser import ConfigParser
 import datetime as dt
+from multiprocessing import Pipe
+from multiprocessing import Pool
+from multiprocessing import Process
+from multiprocessing import Queue
 import os
 import re
 import socket
@@ -9,6 +13,7 @@ import time
 from elasticsearch import Elasticsearch
 
 import utils
+from utils import logit as logit
 
 HOMEDIR = utils.HOMEDIR
 
@@ -24,63 +29,81 @@ MAX_RETRIES = 5
 MSG_PAT = re.compile(r":([^!]+)!~?([^@]+)@(\S+) PRIVMSG (\S+) :(.+)")
 SERVER = "chat.freenode.net"
 #SERVER = "204.225.96.251"
-NICK_BASE = "irclogbot_"
+IRC_NICK_BASE = "irclogbot_"
+ALT_NICK_BASE = "altlogbot_"
 CHANNELS_PER_BOT = 40
 PAUSE_BETWEEN_JOINS = 3
-HEARTBEAT_FILE_BASE = os.path.join(HOMEDIR, "heartbeats", "ALIVE_%s")
-# This will get set when the nick suffix is chosen
-heartbeat_file = None
+HEARTBEAT_FILE_BASE = os.path.join(HOMEDIR, "heartbeats", "%s_ALIVE_%s")
+
+process_pids = []
 
 
-def heartbeat():
-    cmd = "touch %s" % heartbeat_file
+def heartbeat(bot):
+    cmd = "touch %s" % bot.heartbeat_file
     os.system(cmd)
+    logit("HEARTBEAT!!", cmd, force=True)
 
 
 def record(nick, channel, remark, force=False):
     tm = dt.datetime.utcnow().replace(microsecond=0)
     tmstr = tm.strftime("%Y-%m-%dT%H:%M:%S")
-    body = {"channel": channel, "nick": nick, "posted": tmstr, "remark": remark}
-    hashval = utils.gen_key(body)
+    body = {"channel": channel, "nick": nick, "posted": tmstr,
+            "remark": remark}
+    # Leave the time out of the hash, as two bots could differ on when they saw
+    # a posting, and generate different IDs, which would result in duplicate
+    # postings.
+    hash_body = {"channel": channel, "nick": nick, "remark": remark}
+    hashval = utils.gen_key(hash_body)
     body["id"] = hashval
     attempts = 0
     while True:
         try:
-            logit("RECORDING", body, "ID =", hashval, force=force)
+            logit("RECORDING", body, "ID =", hashval, force=True)
             es_client.index(index="irclog", doc_type="irc", id=hashval,
                     body=body)
             break
         except Exception as e:
-            logit("Encountered exception attempting to write to Elasticsearch",
-                    e, force=True)
             attempts += 1
             if attempts >= MAX_RETRIES:
                 logit("Elasticsearch exception: %s" % e, force=True)
                 break
 
 
-def logit(*msgs, force=False):
-    tm = dt.datetime.utcnow().replace(microsecond=0)
-    tmstr = tm.strftime("%Y-%m-%dT%H:%M:%S")
-    log = utils.LOG
-    mthd = log.info if force else log.debug
-    msg_str = " ".join(["%s" % m for m in msgs])
-    msg = tmstr + " " + msg_str
-    mthd(msg)
+def join_channels(bot, queue):
+    while True:
+        chan = queue.get()
+        if not chan:
+            break
+        bot.join_chan(chan)
 
 
-class IRCLogBot():
-    def __init__(self, nick, channels, verbose=False):
-        self.nick = nick
-        self.channels = channels
+def connect_bot(bot):
+    bot.connect()
+
+
+def runbot(bot):
+    bot.run()
+
+
+class LogBot():
+    def __init__(self, nick_base, num, verbose=False):
+        self.num = num
         self.verbose = verbose
-        super(IRCLogBot, self).__init__()
-
-
-    def run(self):
-        heartbeat()
-        logit("Running...", force=self.verbose)
+        self.nick = "%s%s" % (nick_base, num)
+        self.heartbeat_file = HEARTBEAT_FILE_BASE % (nick_base[:3], num)
+        self.channels = []
         self.ircsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        super(LogBot, self).__init__()
+
+
+    def start(self):
+        heartbeat(self)
+        connect()
+        join()
+        listen()
+
+
+    def connect(self):
         logit("Connecting socket to", SERVER, force=self.verbose)
         self.ircsock.connect((SERVER, 6667))
         logit("Connected to %s!" % SERVER, force=self.verbose)
@@ -100,14 +123,13 @@ class IRCLogBot():
         logit("PASSWD sent", force=self.verbose)
         self.wait_for("You are now identified")
 
-        for chan in self.channels:
-            self.joinchan(chan)
-            heartbeat()
-
         logit(self.nick[-1] * 88, force=True)
         logit("And away we go!!!!", force=self.verbose)
         logit(self.nick[-1] * 88, force=self.verbose)
-        heartbeat()
+        heartbeat(self)
+
+
+    def run(self):
         while True:
             raw_ircmsg = self.ircsock.recv(2048)
             try:
@@ -175,7 +197,7 @@ class IRCLogBot():
         self.ircsock.settimeout(curr_timeout)
 
 
-    def joinchan(self, chan):
+    def join_chan(self, chan):
         logit("-" * 88, force=True)
         logit("JOINING", chan, force=True)
         self.ircsock.send(bytes("JOIN %s\n" % chan, "UTF-8")) 
@@ -183,12 +205,13 @@ class IRCLogBot():
         # requests...
         self.pause(PAUSE_BETWEEN_JOINS)
         logit("!!!!!JOINED", chan, force=True)
+        heartbeat(self)
 
 
     def ping(self): # respond to server Pings.
         self.ircsock.send(bytes("PONG :pingis\n", "UTF-8"))
         logit("PONG!", force=self.verbose)
-        heartbeat()
+        heartbeat(self)
 
 
     def sendmsg(self, msg, target):
@@ -198,45 +221,62 @@ class IRCLogBot():
 
 def main():
     parser = argparse.ArgumentParser(description="IRC Bot")
+    nick_choices = ["irc", "alt"]
+    parser.add_argument("--nick-base", "-n", choices=nick_choices,
+            help="The base name for the nick to be used by the "
+            "bots; options are either 'irc' or 'alt'.")
     parser.add_argument("--channel-file", "-f", help="The path of the file "
             "containing the names of the channels to join, one per line.")
-    parser.add_argument("--slice", "-s", help="When used with the channel "
-            "file, takes a slice of CHANNELS_PER_BOT to join. Example: if "
-            "`slice` == 3, it would start at (3 * CHANNELS_PER_BOT), and "
-            "use the next CHANNELS_PER_BOT entries.")
-    parser.add_argument("--channel", "-c", action="append",
-            help="Channels for the bot to join. Can be specified multiple "
-            "times to join multiple channels.")
     parser.add_argument("--verbose", "-v", action="store_true",
             help="Enables verbose output.")
-    parser.add_argument("--botnum", "-n", help="Use this as the suffix for "
-            "the bot's nick.")
     args = parser.parse_args()
+    if args.verbose:
+        utils.LOG.level = utils.logging.DEBUG
+    nick_base = IRC_NICK_BASE
+    if args.nick_base and args.nick_base.lower() == "alt":
+        nick_base = ALT_NICK_BASE
+
+    # Create a pool of channels for the bots to pick from
+    channel_queue = Queue()
     if args.channel_file:
         with open(args.channel_file) as ff:
             chan_lines = ff.read().splitlines()
-        channels = [chan.strip() for chan in chan_lines]
-        if args.slice:
-            islice = int(args.slice)
-            start = (CHANNELS_PER_BOT * islice)
-            end = (CHANNELS_PER_BOT * (islice + 1))
-            end = start + CHANNELS_PER_BOT
-            channels = channels[start:end]
+        [channel_queue.put(chan.strip()) for chan in chan_lines]
     else:
-        channels = args.channel
-        islice = args.botnum if args.botnum else 0
-    if not channels:
-        print("You must specify at least one channel")
+        print("You must specify a channel file")
         exit(1)
-    global heartbeat_file
-    heartbeat_file = HEARTBEAT_FILE_BASE % islice
-    nick = "%s%s" % (NICK_BASE, islice)
-    bot = IRCLogBot(nick, channels, verbose=args.verbose)
-    if args.verbose:
-        utils.LOG.level = utils.logging.DEBUG
-        logit("NICK:", nick, force=True)
-    # Start it!
-    bot.run()
+    # Add flags for the bots to know the queue is empty
+    for i in range(4):
+        channel_queue.put(None)
+    # We need four bots to cover all the channels
+    bots = []
+    procs = []
+    for num in range(4):
+        bot = LogBot(nick_base, num, args.verbose)
+        logit("NICK:", bot.nick, force=True)
+        bots.append(bot)
+        proc = Process(target=connect_bot, args=(bot,))
+        procs.append(proc)
+        proc.start()
+    for p in procs:
+        p.join()
+
+    procs = []
+    for bot in bots:
+        proc = Process(target=join_channels, args=(bot, channel_queue),
+                daemon=False)
+        proc.start()
+        procs.append(proc)
+    [p.join() for p in procs]
+    logit("All channels joined for %s bot." % args.nick_base, force=True)
+
+    procs = []
+    for bot in bots:
+        proc = Process(target=runbot, args=(bot,))
+        proc.start()
+        procs.append(proc)
+        process_pids.append(proc.pid)
+    [p.join() for p in procs]
 
 
 if __name__ == "__main__":

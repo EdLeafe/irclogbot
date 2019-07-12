@@ -14,22 +14,35 @@ import pymysql
 main_cursor = None
 HOST = "dodb"
 conn = None
-CURDIR = os.getcwd()
+HOMEDIR = "/home/ed/projects/irclogbot"
 
 LOG = logging.getLogger(__name__)
+handler = logging.FileHandler(os.path.join(HOMEDIR, "bot.log"))
+LOG.addHandler(handler)
+LOG.setLevel(logging.INFO)
 
 IntegrityError = pymysql.err.IntegrityError
 
 
-def runproc(cmd):
+def runproc(cmd, wait=True):
     proc = Popen([cmd], shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE,
             close_fds=True)
-    stdout_text, stderr_text = proc.communicate()
-    return stdout_text, stderr_text
+    if wait:
+        stdout_text, stderr_text = proc.communicate()
+        return stdout_text, stderr_text
+
+
+def logit(*msgs, force=False):
+    tm = datetime.utcnow().replace(microsecond=0)
+    tmstr = tm.strftime("%Y-%m-%dT%H:%M:%S")
+    mthd = LOG.info if force else LOG.debug
+    msg_str = " ".join(["%s" % m for m in msgs])
+    msg = tmstr + " " + msg_str
+    mthd(msg)
 
 
 def _parse_creds():
-    fpath = os.path.join(CURDIR, ".dbcreds")
+    fpath = os.path.join(HOMEDIR, ".dbcreds")
     with open(fpath) as ff:
         lines = ff.read().splitlines()
     ret = {}
@@ -121,3 +134,9 @@ def gen_key(orig_rec, digest_size=8):
     txt = "".join(txt_vals)
     m.update(txt.encode("utf-8"))
     return m.hexdigest()
+
+
+#def get_heartbeat_file():
+#    heartbeat_dir = os.path.join(HOMEDIR, "heartbeats")
+#    os.makedirs(heartbeat_dir, exist_ok=True)
+#    return os.path.join(heartbeat_dir, "ALIVE_%s")
