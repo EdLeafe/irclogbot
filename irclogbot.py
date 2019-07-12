@@ -19,8 +19,8 @@ HOST = cp.get("default", "host")
 es_client = Elasticsearch(host=HOST)
 
 MSG_PAT = re.compile(r":([^!]+)!~([^@]+)@(\S+) PRIVMSG (\S+) :(.+)")
-#SERVER = "chat.freenode.net"
-SERVER = "204.225.96.251"
+SERVER = "chat.freenode.net"
+#SERVER = "204.225.96.251"
 NICK_BASE = "irclogbot_"
 CHANNELS_PER_BOT = 40
 PAUSE_BETWEEN_JOINS = 5

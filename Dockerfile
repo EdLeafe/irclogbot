@@ -7,4 +7,4 @@
   ADD     utils.py /
   ADD     filemod_check.py /
   WORKDIR /
-  ENTRYPOINT  ["bash"]
+  ENTRYPOINT  ["python"]
