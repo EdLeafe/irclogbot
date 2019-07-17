@@ -12,7 +12,7 @@ import pymysql
 
 
 main_cursor = None
-HOST = "dodb"
+HOST = "dodata"
 conn = None
 HOMEDIR = "/home/ed/projects/irclogbot"
 
