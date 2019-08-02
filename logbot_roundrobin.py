@@ -8,11 +8,9 @@ from multiprocessing import Queue
 import os
 import re
 import socket
-import smtplib
 import time
 
 from elasticsearch import Elasticsearch
-from twilio.rest import Client
 
 import utils
 from utils import logit as logit
@@ -27,10 +25,6 @@ PASSWD = cp.get("default", "password")
 HOST = cp.get("default", "host")
 es_client = Elasticsearch(host=HOST)
 MAX_RETRIES = 5
-SMS_USER = cp.get("sms", "user")
-SMS_PASSWORD = cp.get("sms", "password")
-SMS_FROM_ADDRESS = cp.get("sms", "from_address")
-SMS_TO_ADDRESS = cp.get("sms", "to_address")
 
 MSG_PAT = re.compile(r":([^!]+)!~?([^@]+)@(\S+) PRIVMSG (\S+) :(.+)")
 SERVER = "chat.freenode.net"
@@ -72,15 +66,6 @@ def record(nick, channel, remark, tm, force=False):
             if attempts >= MAX_RETRIES:
                 logit("Elasticsearch exception: %s" % e, force=True)
                 break
-
-
-def notify_me(nick, channel, remark, tm):
-    client = Client(SMS_USER, SMS_PASSWORD)
-    msg = """
-'{nick}' mentioned you in {channel} at {tm}
-"{remark}" """.format(nick=nick, channel=channel, tm=tm, remark=remark).strip()
-    message = client.messages.create(body=msg, from_=SMS_FROM_ADDRESS,
-            to=SMS_TO_ADDRESS)
 
 
 def join_channels(bot, queue):
@@ -177,8 +162,6 @@ class LogBot():
                 return
             tm = dt.datetime.utcnow().replace(microsecond=0)
             record(nick, channel, remark, tm, force=self.verbose)
-            if "edleafe" in remark:
-                notify_me(nick, channel, remark, tm)
 
 
     def wait_for(self, txt):
