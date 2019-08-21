@@ -23,14 +23,13 @@ with open(cred_file) as ff:
     cp.read_file(ff)
 PASSWD = cp.get("default", "password")
 HOST = cp.get("default", "host")
+NICK_BASE = "{base}logbot_".format(base=cp.get("default", "nick"))
 es_client = Elasticsearch(host=HOST)
 MAX_RETRIES = 5
 
 MSG_PAT = re.compile(r":([^!]+)!~?([^@]+)@(\S+) PRIVMSG (\S+) :(.+)")
 SERVER = "chat.freenode.net"
 #SERVER = "204.225.96.251"
-IRC_NICK_BASE = "irclogbot_"
-ALT_NICK_BASE = "altlogbot_"
 CHANNELS_PER_BOT = 40
 PAUSE_BETWEEN_JOINS = 3
 HEARTBEAT_FILE_BASE = os.path.join(HOMEDIR, "heartbeats", "%s_ALIVE_%s")
@@ -85,11 +84,11 @@ def runbot(bot):
 
 
 class LogBot():
-    def __init__(self, nick_base, num, verbose=False):
+    def __init__(self, num, verbose=False):
         self.num = num
         self.verbose = verbose
-        self.nick = "%s%s" % (nick_base, num)
-        self.heartbeat_file = HEARTBEAT_FILE_BASE % (nick_base[:3], num)
+        self.nick = "%s%s" % (NICK_BASE, num)
+        self.heartbeat_file = HEARTBEAT_FILE_BASE % (NICK_BASE[:3], num)
         self.channels = []
         self.ircsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         super(LogBot, self).__init__()
@@ -221,10 +220,6 @@ class LogBot():
 
 def main():
     parser = argparse.ArgumentParser(description="IRC Bot")
-    nick_choices = ["irc", "alt"]
-    parser.add_argument("--nick-base", "-n", choices=nick_choices,
-            help="The base name for the nick to be used by the "
-            "bots; options are either 'irc' or 'alt'.")
     parser.add_argument("--channel-file", "-f", help="The path of the file "
             "containing the names of the channels to join, one per line.")
     parser.add_argument("--verbose", "-v", action="store_true",
@@ -232,9 +227,6 @@ def main():
     args = parser.parse_args()
     if args.verbose:
         utils.LOG.level = utils.logging.DEBUG
-    nick_base = IRC_NICK_BASE
-    if args.nick_base and args.nick_base.lower() == "alt":
-        nick_base = ALT_NICK_BASE
 
     # Create a pool of channels for the bots to pick from
     channel_queue = Queue()
@@ -252,7 +244,7 @@ def main():
     bots = []
     procs = []
     for num in range(4):
-        bot = LogBot(nick_base, num, args.verbose)
+        bot = LogBot(num, args.verbose)
         logit("NICK:", bot.nick, force=True)
         bots.append(bot)
         proc = Process(target=connect_bot, args=(bot,))
