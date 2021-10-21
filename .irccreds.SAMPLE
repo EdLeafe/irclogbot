@@ -1,4 +1,0 @@
-[default]
-host = example.com
-password = MySuperSecretNickPassword
-nick = irc
